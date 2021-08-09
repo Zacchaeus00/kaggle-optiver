@@ -138,10 +138,6 @@ class OptiverRecursiveLOFO:
             json.dump(self.feature_cols, f)
         with open(self.log_dir / 'group_dict.json', 'w') as f:
             json.dump(self.group_dict, f)
-        with open(self.log_dir / 'feature_cols_selected.json', 'w') as f:
-            json.dump(self.feature_cols_selected, f)
-        with open(self.log_dir / 'group_dict_selected.json', 'w') as f:
-            json.dump(self.group_dict_selected, f)
         
     def _log(self):
         joblib.dump(self.lofo_dfs, self.log_dir / 'lofo_dfs.pkl')
@@ -151,6 +147,10 @@ class OptiverRecursiveLOFO:
             json.dump(self.eliminated_importances, f)
         with open(self.log_dir / 'scores.json', 'w') as f:
             json.dump(self.scores, f)
+        with open(self.log_dir / 'feature_cols_selected.json', 'w') as f:
+            json.dump(self.feature_cols_selected, f)
+        with open(self.log_dir / 'group_dict_selected.json', 'w') as f:
+            json.dump(self.group_dict_selected, f)
     
     def recursive_select(self):
         done = False
