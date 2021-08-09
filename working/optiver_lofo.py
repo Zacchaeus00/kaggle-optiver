@@ -7,6 +7,9 @@ import lightgbm as lgb
 from sklearn.model_selection import GroupKFold
 from utils import rmspe
 import warnings
+import joblib
+from pathlib import Path
+import json
 
 def lofo_to_df(lofo_scores, feature_list):
     importance_df = pd.DataFrame()
@@ -17,7 +20,7 @@ def lofo_to_df(lofo_scores, feature_list):
     for val_score in range(lofo_scores.shape[1]):
         importance_df["val_imp_{}".format(val_score)] = lofo_scores[:, val_score]
 
-    return importance_df.sort_values("importance_mean", ascending=False)
+    return importance_df.sort_values("importance_mean", ascending=False).reset_index(drop=True)
 
 
 def plot_importance(importance_df, figsize=(8, 8), kind="default"):
@@ -100,7 +103,7 @@ class OptiverLOFO:
         return self.lofo_df
     
 class OptiverRecursiveLOFO:
-    def __init__(self, train, feature_cols, group_dict=None, log_dir='recusive_lofo_log/'):
+    def __init__(self, train, feature_cols, group_dict=None, log_dir='recursive_lofo_log/'):
         self.train = train
         self.feature_cols = feature_cols
         if group_dict is None:
@@ -111,11 +114,55 @@ class OptiverRecursiveLOFO:
         self.group_dict_selected = self.group_dict
         self.step = 0
         self.lofo_dfs = []
+        self.eliminated_features = []
+        self.eliminated_importances = []
+        self.log_dir = Path(log_dir)
+        self.log_dir.mkdir(parents=True, exist_ok=True)
+        self._init_log()
+        self.scores = []
         
     def _select_one_round(self):    
         lofo = OptiverLOFO(self.train, self.feature_cols_selected, group_dict=self.group_dict_selected)
         lofo_df = lofo.get_importance()
+        self.scores.append(lofo.base_cv_score)
         self.lofo_dfs.append(lofo_df)
         self.step += 1
+        if lofo_df.iloc[-1].importance_mean <= 0:
+            self.eliminated_importances.append(lofo_df.iloc[-1].importance_mean)
+            self.eliminated_features.append(lofo_df.iloc[-1].feature)
+            return False
+        else:
+            return True
+    def _init_log(self):
+        with open(self.log_dir / 'feature_cols.json', 'w') as f:
+            json.dump(self.feature_cols, f)
+        with open(self.log_dir / 'group_dict.json', 'w') as f:
+            json.dump(self.group_dict, f)
+        with open(self.log_dir / 'feature_cols_selected.json', 'w') as f:
+            json.dump(self.feature_cols_selected, f)
+        with open(self.log_dir / 'group_dict_selected.json', 'w') as f:
+            json.dump(self.group_dict_selected, f)
+        
+    def _log(self):
+        joblib.dump(self.lofo_dfs, self.log_dir / 'lofo_dfs.pkl')
+        with open(self.log_dir / 'eliminated_features.json', 'w') as f:
+            json.dump(self.eliminated_features, f)
+        with open(self.log_dir / 'eliminated_importances.json', 'w') as f:
+            json.dump(self.eliminated_importances, f)
+        with open(self.log_dir / 'scores.json', 'w') as f:
+            json.dump(self.scores, f)
+    
     def recursive_select(self):
-        lofo = OptiverLOFO(train, feature_cols, group_dict=feature_groups)
+        done = False
+        while not done:
+            print("step", self.step)
+            print("#feature", len(self.feature_cols_selected))
+            done = self._select_one_round()
+            if not done:
+                eliminated_feature = self.eliminated_features[-1]
+                print(eliminated_feature, "eliminated")
+                self.feature_cols_selected = [c for c in self.feature_cols_selected if c not in self.group_dict[eliminated_feature]]
+                del self.group_dict_selected[eliminated_feature]
+            else:
+                print('done!')
+            self._log()
