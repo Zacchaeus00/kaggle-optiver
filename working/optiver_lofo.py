@@ -124,7 +124,7 @@ class OptiverRecursiveLOFO:
     def _select_one_round(self):    
         lofo = OptiverLOFO(self.train, self.feature_cols_selected, group_dict=self.group_dict_selected)
         lofo_df = lofo.get_importance()
-        self.scores.append(lofo.base_cv_score)
+        self.scores.append(np.mean(lofo.base_cv_score))
         self.lofo_dfs.append(lofo_df)
         self.step += 1
         if lofo_df.iloc[-1].importance_mean <= 0:
