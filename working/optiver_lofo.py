@@ -10,6 +10,11 @@ import warnings
 import joblib
 from pathlib import Path
 import json
+from lofo import FLOFOImportance
+from sklearn.metrics import make_scorer
+def neg_rmspe(y_gt, y_pred):
+    return - rmspe(y_gt, y_pred)
+neg_rmspe_scorer = make_scorer(neg_rmspe)
 
 def lofo_to_df(lofo_scores, feature_list):
     importance_df = pd.DataFrame()
@@ -101,7 +106,53 @@ class OptiverLOFO:
         lofo_cv_scores_normalized = np.array([lofo_cv_score-base_cv_score for lofo_cv_score in lofo_cv_scores])
         self.lofo_df = lofo_to_df(lofo_cv_scores_normalized, feature_list)
         return self.lofo_df
+
     
+class OptiverFLOFO:
+    def __init__(self, train, feature_cols):
+        self.train = train
+        self.feature_cols = feature_cols
+        self.model = model = lgb.LGBMRegressor(random_state=42, min_child_samples=int(0.01*self.train.shape[0]), objective='rmse')
+        self.gkf = GroupKFold(5)
+        self.folds_lofo_df = []
+        self.importances = np.zeros(len(feature_cols), 5)
+    def _fit_model(self, fold):
+        for f, (trn_ind, val_ind) in enumerate(self.gkf.split(self.train, groups=self.train.time_id)):
+            if f != fold:
+                continue
+            x_train, x_val = self.train.loc[trn_ind, self.feature_cols], self.train.loc[val_ind, self.feature_cols]
+            y_train, y_val = self.train.loc[trn_ind, 'target'], self.train.loc[val_ind, 'target']
+
+            # Root mean squared percentage error weights
+            train_weights = 1 / np.square(y_train)
+            val_weights = 1 / np.square(y_val)
+
+            # Fit with sklearn API
+            self.model.fit(x_train, 
+                      y_train, 
+                      sample_weight=train_weights,
+                      eval_set=[(x_val, y_val)],
+                      eval_sample_weight=[val_weights],
+                      eval_metric='rmse',
+                      early_stopping_rounds=100,
+                      verbose=False)
+
+    def get_importance(self, num_sampling=10, random_state=42):
+        
+        for fold, (trn_ind, val_ind) in enumerate(self.gkf.split(self.train, groups=self.train.time_id)):
+            print(f"fitting base model on fold {fold}")
+            self._fit_model(fold)
+            flofo = FLOFOImportance(trained_model=self.model,
+                                   validation_df=self.train.iloc[val_ind],
+                                   features=self.feature_cols,
+                                    target='target',
+                                   scoring=neg_rmspe_scorer,)
+            flofo_df = flofo.get_importance(num_sampling, random_state)
+            self.folds_lofo_df.append(flofo_df)
+            self.importances[:, fold] = flofo_df['importance_mean']
+        return lofo_to_df(self.importances, self.feature_cols)
+        
+        
 class OptiverRecursiveLOFO:
     def __init__(self, train, feature_cols, group_dict=None, log_dir='recursive_lofo_log/'):
         self.train = train
