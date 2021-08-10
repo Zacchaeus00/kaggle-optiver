@@ -67,7 +67,7 @@ def objective(trial):
         "reg_alpha": trial.suggest_float("reg_alpha", 1e-8, 10, log=True),
         "reg_lambda": trial.suggest_float("reg_lambda", 1e-8, 10, log=True),
         "n_estimators": trial.suggest_int("n_estimators", 50, 10000),
-        "learning_rate": trial.suggest_float("learning_rate", 1e-3, 1, log=True),
+        "learning_rate": trial.suggest_float("learning_rate", 1e-2, 1, log=True),
         "num_leaves": trial.suggest_int("num_leaves", 2, 2048),
         "colsample_bytree": trial.suggest_float("feature_fraction", 0.2, 1.0), # feature_fraction
         "subsample": trial.suggest_float("bagging_fraction", 0.2, 1.0), # bagging_fraction
