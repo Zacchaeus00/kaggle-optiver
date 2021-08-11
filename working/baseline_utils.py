@@ -474,7 +474,7 @@ def calculate_features2(book_df, trade_df):
                                  ["isoversize25", "down25"],
                                  ["isoversize75", "up75"],
                                  ["isoversize75", "down75"]]:
-        # print(filtername, flagname)
+        print(filtername, flagname)
         book_df_new = book_df1[book_df1[filtername] == flagname]
         #个数
         df_fnum = pd.DataFrame({
