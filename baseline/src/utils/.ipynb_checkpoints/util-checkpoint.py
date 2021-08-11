@@ -101,7 +101,7 @@ def feature_agg(book, trade):
     trade_feats = ['price', 'size', 'order_count', 'seconds_in_bucket']
 
     trade = trade.groupby(['time_id', 'stock_id'])[trade_feats].agg(
-        ['sum', 'mean', 'std', 'max', 'min']).reset_index()
+        ['sum', 'mean', 'std', 'max', 'min', 'median']).reset_index()
 
     book = book.groupby(['time_id', 'stock_id'])[book_feats].agg(
         [lambda x: realized_volatility(log_return(x))]).reset_index()
@@ -177,6 +177,7 @@ def gen_data_encoding(df_ret, df_label, data_type='train'):
             'std',
             'max',
             'min',
+            'median',
         ]).reset_index()
 
         # fix column names
@@ -191,6 +192,7 @@ def gen_data_encoding(df_ret, df_label, data_type='train'):
         'std',
         'max',
         'min',
+        'median',
     ]).reset_index()
     time_df.columns = ['time_id'] + [
         f'{f}_time' for f in time_df.columns.values.tolist()[1:]
@@ -241,6 +243,10 @@ def calc_rollingstats(rolling_x, roll_name):
             roll_name + "_skew":
             rolling_x.groupby("time_id")[roll_name].skew()
         })
+        roll_median = pd.DataFrame({
+            roll_name + "_median":
+            rolling_x.groupby("time_id")[roll_name].median()
+        })
 
         data_merge = pd.merge(roll_mean,
                               roll_std,
@@ -257,13 +263,18 @@ def calc_rollingstats(rolling_x, roll_name):
                               left_index=True,
                               right_index=True,
                               how="inner")
+        data_merge = pd.merge(data_merge,
+                              roll_median,
+                              left_index=True,
+                              right_index=True,
+                              how="inner")
 
     else:
 
         data_merge = pd.DataFrame([[np.nan, np.nan, np.nan, np.nan]])
         data_merge.columns = [
             roll_name + "_mean", roll_name + "_std", roll_name + "_skew",
-            roll_name + "_autocorr"
+            roll_name + "_autocorr", roll_name + "_median"
         ]
 
     return data_merge
@@ -293,6 +304,8 @@ def make_candle(df_data, price_name, vol_name, amt_name):
 
     df_mean = pd.DataFrame(
         {price_name + "mean": df_data.groupby("time_id")[price_name].mean()})
+    df_median = pd.DataFrame(
+        {price_name + "median": df_data.groupby("time_id")[price_name].median()})
     df_high = pd.DataFrame(
         {price_name + "high": df_data.groupby("time_id")[price_name].max()})
     df_low = pd.DataFrame(
@@ -313,6 +326,11 @@ def make_candle(df_data, price_name, vol_name, amt_name):
                          how="inner")
     df_candle = pd.merge(df_candle,
                          df_mean,
+                         left_index=True,
+                         right_index=True,
+                         how="inner")
+    df_candle = pd.merge(df_candle,
+                         df_median,
                          left_index=True,
                          right_index=True,
                          how="inner")
